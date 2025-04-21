@@ -175,82 +175,84 @@ elif page == "Content-Based Recommendations":
 
 # Page 2: File Upload and Filters
 elif page == "Top 10 Recommendation based on User Preferences":
-    st.title("📂 Upload Latest Dataset")
+    st.title("🎮 Personalized Game Recommendations")
     st.markdown("""
-    Follow these steps to get personalized game recommendations:
-    1. Upload your game data in CSV format(Ensure that the dataset is the latest).
-    2. Enter your preferred genre and minimum user score.
-    3. Click "Get Recommendations" to view the top suggestions.
+    Upload your latest game dataset and get personalized recommendations.
+    - Supported format: CSV
+    - Required columns: `Title`, `Genres`, `User Score`
     """)
 
-    # Upload section
-    uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
+    # Upload Section
+    uploaded_file = st.file_uploader("📂 Upload CSV File", type="csv")
 
-    if uploaded_file is not None:
+    if uploaded_file:
         try:
-            # Load the dataset
-            df_uploaded = pd.read_csv(uploaded_file)
-            
-            # Data processing
-            df_uploaded['Genres'] = df_uploaded['Genres'].astype(str).fillna('')
-            df_uploaded['User Score'] = pd.to_numeric(df_uploaded['User Score'], errors='coerce')
+            df = pd.read_csv(uploaded_file)
 
-            # Display dataset preview
-            st.write("### Dataset Preview")
-            st.dataframe(df_uploaded.head())
+            # Ensure required columns exist
+            required_cols = ['Title', 'Genres', 'User Score']
+            if not all(col in df.columns for col in required_cols):
+                st.error(f"Uploaded file must include columns: {', '.join(required_cols)}")
+            else:
+                # Data cleaning
+                df['Genres'] = df['Genres'].astype(str).fillna('')
+                df['User Score'] = pd.to_numeric(df['User Score'], errors='coerce')
 
-            # Filter options section
-            st.subheader("🎯 Filter Options")
+                st.write("### 📊 Dataset Preview")
+                st.dataframe(df.head(10))
 
-            genres = st.text_input(
-                "Preferred Genre (e.g., Action, Adventure):",
-                value="",
-                placeholder="Enter genres (e.g., Action, Adventure)",
-                help="Enter the genre(s) you like. Use commas for multiple genres."
-            ).strip()
+                # Extract unique genres for dropdown
+                unique_genres = sorted(
+                    set(g.strip() for sublist in df['Genres'].str.split(',') for g in sublist if g.strip())
+                )
 
-            min_user_score_str = st.text_input(
-                "Minimum Acceptable User Score (0.0 to 10.0):",
-                value="0.0",
-                placeholder="Enter a score between 0.0 and 10.0",
-                help="Enter a number between 0.0 and 10.0 for the minimum score."
-            )
+                st.subheader("🎯 Filter Your Preferences")
 
-            try:
-                min_user_score = float(min_user_score_str)
-                if min_user_score < 0.0 or min_user_score > 10.0:
-                    st.error("Score must be between 0.0 and 10.0.")
-                    min_user_score = 0.0
-            except ValueError:
-                st.error("Please enter a valid numeric score.")
-                min_user_score = 0.0
+                selected_genres = st.multiselect(
+                    "Select Your Preferred Genre(s):",
+                    options=unique_genres,
+                    help="Choose one or more genres you enjoy."
+                )
 
-            # Recommendations button
-            if st.button("Get Recommendations"):
-                with st.spinner("Processing your request..."):
-                    try:
-                        recommended_games = recommend_games(df_uploaded, {'Genres': genres, 'Minimum User Score': min_user_score})
-                        if not recommended_games.empty:
-                            top_10_games = recommended_games.head(10)
-                            st.write("### Top 10 Recommended Games")
-                            st.dataframe(top_10_games)
+                user_score_input = st.slider(
+                    "Minimum User Score:",
+                    min_value=0.0, max_value=10.0, value=7.0, step=0.1
+                )
 
-                            # Download 
-                            csv = top_10_games.to_csv(index=False)
-                            st.download_button(
-                                label="Download Recommendations as CSV",
-                                data=csv,
-                                file_name='recommended_games.csv',
-                                mime='text/csv'
-                            )
-                        else:
-                            st.warning("No games match your preferences. Try adjusting the genre or score.")
-                    except Exception as e:
-                        st.error(f"An error occurred while processing recommendations: {e}")
+                if st.button("✨ Get Recommendations"):
+                    with st.spinner("Finding your perfect games..."):
+                        try:
+                            # Filter by genres
+                            def genre_match(row):
+                                return any(g.lower() in row['Genres'].lower() for g in selected_genres)
+
+                            filtered_df = df[df['User Score'] >= user_score_input]
+                            if selected_genres:
+                                filtered_df = filtered_df[filtered_df.apply(genre_match, axis=1)]
+
+                            top_10 = filtered_df.sort_values(by='User Score', ascending=False).head(10)
+
+                            if not top_10.empty:
+                                st.success("🎉 Here are your top recommended games!")
+                                st.dataframe(top_10[['Title', 'Genres', 'User Score']])
+
+                                # Download
+                                csv_data = top_10.to_csv(index=False)
+                                st.download_button(
+                                    label="📥 Download as CSV",
+                                    data=csv_data,
+                                    file_name="recommended_games.csv",
+                                    mime="text/csv"
+                                )
+                            else:
+                                st.warning("No games matched your filters. Try adjusting them.")
+                        except Exception as e:
+                            st.error(f"🚨 Error during recommendation: {e}")
         except Exception as e:
-            st.error(f"An error occurred while loading the file: {e}")
+            st.error(f"🚨 Could not read the file: {e}")
     else:
-        st.info("Please upload a CSV file to get started.")
+        st.info("⬆️ Upload a CSV file to begin.")
+
 
 # Page 3: Game Correlation Finder
 elif page == "Game Correlation Finder":
