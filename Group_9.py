@@ -173,87 +173,200 @@ elif page == "Content-Based Recommendations":
         else:
             st.write("No matching game found. Please try another.")
 
-# Page 2: File Upload and Filters
 elif page == "Top 10 Recommendation based on User Preferences":
     st.title("🎮 Personalized Game Recommendations")
     st.markdown("""
-    Upload your latest game dataset and get personalized recommendations.
-    - Supported format: CSV
-    - Required columns: `Title`, `Genres`, `User Score`
-    """)
+    <div style='background-color: #f0f2f6; padding: 15px; border-radius: 10px; margin-bottom: 20px;'>
+        <h3 style='color: #2e7d32;'>How to use this feature:</h3>
+        <ol style='line-height: 1.6;'>
+            <li>Upload your game dataset in CSV format (ensure it contains 'Genres' and 'User Score' columns)</li>
+            <li>Set your preferences using the filters below</li>
+            <li>Click "Get Recommendations" to see your personalized top 10 games</li>
+            <li>Download your recommendations or save them for later</li>
+        </ol>
+    </div>
+    """, unsafe_allow_html=True)
 
-    # Upload Section
-    uploaded_file = st.file_uploader("📂 Upload CSV File", type="csv")
+    # Upload section with improved UI
+    with st.expander("📤 Upload Your Game Dataset", expanded=True):
+        uploaded_file = st.file_uploader(
+            "Drag and drop your CSV file here or click to browse",
+            type="csv",
+            help="Your file should include columns for 'Title', 'Genres', 'User Score', and other relevant game information."
+        )
 
-    if uploaded_file:
+    if uploaded_file is not None:
         try:
-            df = pd.read_csv(uploaded_file)
-
-            # Ensure required columns exist
-            required_cols = ['Title', 'Genres', 'User Score']
-            if not all(col in df.columns for col in required_cols):
-                st.error(f"Uploaded file must include columns: {', '.join(required_cols)}")
-            else:
+            # Load and process data with progress indicators
+            with st.spinner("Processing your dataset..."):
+                df_uploaded = pd.read_csv(uploaded_file)
+                
+                # Data validation and processing
+                required_columns = ['Title', 'Genres', 'User Score']
+                missing_cols = [col for col in required_columns if col not in df_uploaded.columns]
+                
+                if missing_cols:
+                    st.error(f"Missing required columns: {', '.join(missing_cols)}")
+                    st.stop()
+                
                 # Data cleaning
-                df['Genres'] = df['Genres'].astype(str).fillna('')
-                df['User Score'] = pd.to_numeric(df['User Score'], errors='coerce')
+                df_uploaded['Genres'] = df_uploaded['Genres'].astype(str).fillna('')
+                df_uploaded['User Score'] = pd.to_numeric(df_uploaded['User Score'], errors='coerce')
+                df_uploaded = df_uploaded.dropna(subset=['User Score'])
+                
+                # Display dataset information
+                st.success(f"✅ Successfully loaded dataset with {len(df_uploaded)} games")
+                
+                # Show basic stats
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Total Games", len(df_uploaded))
+                with col2:
+                    st.metric("Unique Genres", df_uploaded['Genres'].nunique())
+                with col3:
+                    avg_score = df_uploaded['User Score'].mean()
+                    st.metric("Average User Score", f"{avg_score:.1f}/10")
 
-                st.write("### 📊 Dataset Preview")
-                st.dataframe(df.head(10))
-
-                # Extract unique genres for dropdown
-                unique_genres = sorted(
-                    set(g.strip() for sublist in df['Genres'].str.split(',') for g in sublist if g.strip())
-                )
-
-                st.subheader("🎯 Filter Your Preferences")
-
+            # Filter options in an expandable section
+            with st.expander("🔍 Set Your Preferences", expanded=True):
+                st.subheader("Filter Options")
+                
+                # Multi-select for genres with search capability
+                all_genres = sorted(set(g for genres in df_uploaded['Genres'].str.split(', ') 
+                                     for g in genres if g))
                 selected_genres = st.multiselect(
-                    "Select Your Preferred Genre(s):",
-                    options=unique_genres,
-                    help="Choose one or more genres you enjoy."
+                    "Select preferred genres:",
+                    options=all_genres,
+                    default=[],
+                    help="Select one or more genres you're interested in"
                 )
-
-                user_score_input = st.slider(
-                    "Minimum User Score:",
-                    min_value=0.0, max_value=10.0, value=7.0, step=0.1
+                
+                # Slider for user score with better formatting
+                min_score, max_score = st.slider(
+                    "Select acceptable user score range:",
+                    min_value=0.0,
+                    max_value=10.0,
+                    value=(6.0, 10.0),
+                    step=0.1,
+                    format="%.1f",
+                    help="Adjust the range to filter by user ratings"
                 )
+                
+                # Additional filters
+                st.subheader("Advanced Filters")
+                col1, col2 = st.columns(2)
+                with col1:
+                    min_reviews = st.number_input(
+                        "Minimum user reviews:",
+                        min_value=0,
+                        value=10,
+                        help="Filter out games with few user reviews"
+                    )
+                with col2:
+                    year_range = st.slider(
+                        "Release year range:",
+                        min_value=1980,
+                        max_value=2023,
+                        value=(2000, 2023),
+                        help="Filter by when games were released"
+                    )
 
-                if st.button("✨ Get Recommendations"):
-                    with st.spinner("Finding your perfect games..."):
-                        try:
-                            # Filter by genres
-                            def genre_match(row):
-                                return any(g.lower() in row['Genres'].lower() for g in selected_genres)
-
-                            filtered_df = df[df['User Score'] >= user_score_input]
-                            if selected_genres:
-                                filtered_df = filtered_df[filtered_df.apply(genre_match, axis=1)]
-
-                            top_10 = filtered_df.sort_values(by='User Score', ascending=False).head(10)
-
-                            if not top_10.empty:
-                                st.success("🎉 Here are your top recommended games!")
-                                st.dataframe(top_10[['Title', 'Genres', 'User Score']])
-
-                                # Download
-                                csv_data = top_10.to_csv(index=False)
+            # Recommendation button with loading state
+            if st.button("🎯 Get My Recommendations", use_container_width=True):
+                with st.spinner("Finding the perfect games for you..."):
+                    try:
+                        # Apply filters
+                        filtered_df = df_uploaded.copy()
+                        
+                        # Genre filter
+                        if selected_genres:
+                            genre_filter = filtered_df['Genres'].apply(
+                                lambda x: any(genre in x for genre in selected_genres)
+                            filtered_df = filtered_df[genre_filter]
+                        
+                        # Score filter
+                        score_filter = (filtered_df['User Score'] >= min_score) & \
+                                      (filtered_df['User Score'] <= max_score)
+                        filtered_df = filtered_df[score_filter]
+                        
+                        # Additional filters
+                        if 'User Ratings Count' in filtered_df.columns:
+                            filtered_df = filtered_df[filtered_df['User Ratings Count'] >= min_reviews]
+                        
+                        if 'Release Date' in filtered_df.columns:
+                            filtered_df['Release Year'] = pd.to_datetime(
+                                filtered_df['Release Date'], errors='coerce').dt.year
+                            year_filter = (filtered_df['Release Year'] >= year_range[0]) & \
+                                         (filtered_df['Release Year'] <= year_range[1])
+                            filtered_df = filtered_df[year_filter]
+                        
+                        # Sort and select top 10
+                        if not filtered_df.empty:
+                            recommended_games = filtered_df.sort_values(
+                                by='User Score', ascending=False).head(10)
+                            
+                            # Display results in a nice format
+                            st.subheader("🌟 Your Top 10 Recommended Games")
+                            
+                            # Show as cards for better visual appeal
+                            cols = st.columns(2)
+                            for idx, game in recommended_games.iterrows():
+                                with cols[idx % 2]:
+                                    with st.container():
+                                        st.markdown(f"""
+                                        <div style='background-color: #333333; padding: 15px; border-radius: 10px; margin-bottom: 15px;'>
+                                            <h4 style='color: #4CAF50;'>{game['Title']}</h4>
+                                            <p><b>Genre:</b> {game['Genres']}</p>
+                                            <p><b>User Score:</b> {game['User Score']:.1f}/10</p>
+                                            {'<p><b>Platforms:</b> ' + game['Platforms'] + '</p>' if 'Platforms' in game else ''}
+                                            {'<p><b>Release Date:</b> ' + str(game['Release Date']) + '</p>' if 'Release Date' in game else ''}
+                                        </div>
+                                        """, unsafe_allow_html=True)
+                            
+                            # Download options
+                            st.markdown("---")
+                            st.subheader("📥 Download Your Recommendations")
+                            
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                csv = recommended_games.to_csv(index=False)
                                 st.download_button(
-                                    label="📥 Download as CSV",
-                                    data=csv_data,
-                                    file_name="recommended_games.csv",
-                                    mime="text/csv"
+                                    label="Download as CSV",
+                                    data=csv,
+                                    file_name='my_game_recommendations.csv',
+                                    mime='text/csv',
+                                    help="Save your recommendations as a CSV file"
                                 )
-                            else:
-                                st.warning("No games matched your filters. Try adjusting them.")
-                        except Exception as e:
-                            st.error(f"🚨 Error during recommendation: {e}")
+                            with col2:
+                                json_data = recommended_games.to_json(orient='records')
+                                st.download_button(
+                                    label="Download as JSON",
+                                    data=json_data,
+                                    file_name='my_game_recommendations.json',
+                                    mime='application/json',
+                                    help="Save your recommendations as a JSON file"
+                                )
+                            with col3:
+                                if st.button("Save to My Profile", help="Coming soon - save to your account"):
+                                    st.info("This feature is coming soon!")
+                        else:
+                            st.warning("""
+                            No games match your current filters. Try:
+                            - Broadening your genre selection
+                            - Adjusting the score range
+                            - Removing some filters
+                            """)
+                    except Exception as e:
+                        st.error(f"An error occurred: {str(e)}")
+                        st.exception(e)
         except Exception as e:
-            st.error(f"🚨 Could not read the file: {e}")
+            st.error(f"Failed to process your file: {str(e)}")
     else:
-        st.info("⬆️ Upload a CSV file to begin.")
-
-
+        st.info("""
+        ℹ️ To get started, please upload a CSV file containing game data. 
+        Need sample data? [Download example dataset](#) (link coming soon)
+        """)
+        
 # Page 3: Game Correlation Finder
 elif page == "Game Correlation Finder":
     st.title('🎮 Game Correlation Finder')
