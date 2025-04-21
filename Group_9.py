@@ -322,7 +322,7 @@ elif page == "About":
     This Game Recommendation System was developed to help gamers discover new titles they might enjoy.
     
     ### How It Works:
-    - *Content-Based jett is trash Recommendations*: This method uses the genres, platforms, and publishers of games to find similar titles.
+    - *Content-Based Recommendations*: This method uses the genres, platforms, and publishers of games to find similar titles.
     - *Top 10 Recommendations*: Upload your own dataset and apply filters to get personalized game recommendations.
     - *Game Correlation Finder*: Analyze game correlations based on user ratings to find titles that have similar user reception.
     
