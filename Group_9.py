@@ -177,7 +177,7 @@ elif page == "Content-Based Recommendations":
 elif page == "Top 10 Recommendation based on User Preferences":
     st.title("🎮 Personalized Game Recommendations")
     st.markdown("""
-    <div style='background-color: #f0f2f6; padding: 15px; border-radius: 10px; margin-bottom: 20px;'>
+    <div style='padding: 15px; border-radius: 10px; margin-bottom: 20px;'>
         <h3 style='color: #2e7d32;'>How to use this feature:</h3>
         <ol style='line-height: 1.6;'>
             <li>Upload your game dataset in CSV format (ensure it contains 'Genres' and 'User Score' columns)</li>
