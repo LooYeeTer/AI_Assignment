@@ -276,14 +276,15 @@ elif page == "Top 10 Recommendation based on User Preferences":
             if st.button("🎯 Get My Recommendations", use_container_width=True):
                 with st.spinner("Finding the perfect games for you..."):
                     try:
-                        # Apply filters
-                        filtered_df = df_uploaded.copy()
-                        
-                        # Genre filter
-                        if selected_genres:
-                            genre_filter = filtered_df['Genres'].apply(
-                                lambda x: any(genre in x for genre in selected_genres)
-                            filtered_df = filtered_df[genre_filter]
+# Apply filters
+filtered_df = df_uploaded.copy()
+
+# Genre filter - corrected version
+if selected_genres:
+    genre_filter = filtered_df['Genres'].apply(
+        lambda x: any(genre in x for genre in selected_genres)
+    )
+    filtered_df = filtered_df[genre_filter]
                         
                         # Score filter
                         score_filter = (filtered_df['User Score'] >= min_score) & \
