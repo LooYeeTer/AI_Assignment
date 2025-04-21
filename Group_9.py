@@ -197,26 +197,28 @@ elif page == "Top 10 Recommendation based on User Preferences":
         )
 
     if uploaded_file is not None:
-        try:
-            # Load and process data with progress indicators
-            with st.spinner("Processing your dataset..."):
-                df_uploaded = pd.read_csv(uploaded_file)
-                
-                # Data validation and processing
-                required_columns = ['Title', 'Genres', 'User Score']
-                missing_cols = [col for col in required_columns if col not in df_uploaded.columns]
-                
-                if missing_cols:
-                    st.error(f"Missing required columns: {', '.join(missing_cols)}")
-                    st.stop()
-                
-                # Data cleaning
-                df_uploaded['Genres'] = df_uploaded['Genres'].astype(str).fillna('')
-                df_uploaded['User Score'] = pd.to_numeric(df_uploaded['User Score'], errors='coerce')
-                df_uploaded = df_uploaded.dropna(subset=['User Score'])
-                
-                # Display dataset information
-                st.success(f"✅ Successfully loaded dataset with {len(df_uploaded)} games")
+try:
+    # Load and process data with progress indicators
+    with st.spinner("Processing your dataset..."):
+        df_uploaded = pd.read_csv(uploaded_file)
+        
+        # Data validation and processing
+        required_columns = ['Title', 'Genres', 'User Score']
+        missing_cols = [col for col in required_columns if col not in df_uploaded.columns]
+        
+        if missing_cols:
+            st.error(f"Missing required columns: {', '.join(missing_cols)}")
+            st.stop()
+        
+        # Data cleaning
+        df_uploaded['Genres'] = df_uploaded['Genres'].astype(str).fillna('')
+        df_uploaded['User Score'] = pd.to_numeric(df_uploaded['User Score'], errors='coerce')
+        df_uploaded = df_uploaded.dropna(subset=['User Score'])
+        
+        # Display dataset information
+        st.success(f"✅ Successfully loaded dataset with {len(df_uploaded)} games")
+except Exception as e:
+    st.error(f"Failed to process your file: {str(e)}")
                 
                 # Show basic stats
                 col1, col2, col3 = st.columns(3)
