@@ -184,7 +184,7 @@ elif page == "Top 10 Recommendation based on User Preferences":
             <li>Upload your game dataset in CSV format (must include 'Title', 'Genres', 'User Score')</li>
             <li>Set your preferences below</li>
             <li>Click "Get Recommendations" to view your Top 10 games</li>
-            <li>Download or save your list</li>
+            <li>Download your list</li>
         </ol>
     </div>
     """, unsafe_allow_html=True)
@@ -331,7 +331,7 @@ elif page == "Top 10 Recommendation based on User Preferences":
 
                             st.markdown("---")
 
-                            # Model Evaluation: Top 10 MAE and Overall MAE
+                            # Model Evaluation
                             st.subheader("📊 Model Evaluation")
                             col1, col2 = st.columns(2)
                             with col1:
@@ -341,28 +341,16 @@ elif page == "Top 10 Recommendation based on User Preferences":
 
                             st.markdown("---")
 
-                            # Download Buttons
+                            # Download CSV Only
                             st.subheader("📥 Download Your Recommendations")
-                            col1, col2, col3 = st.columns(3)
-                            with col1:
-                                csv = recommended_games.to_csv(index=False)
-                                st.download_button(
-                                    label="Download as CSV",
-                                    data=csv,
-                                    file_name='my_game_recommendations.csv',
-                                    mime='text/csv'
-                                )
-                            with col2:
-                                json_data = recommended_games.to_json(orient='records')
-                                st.download_button(
-                                    label="Download as JSON",
-                                    data=json_data,
-                                    file_name='my_game_recommendations.json',
-                                    mime='application/json'
-                                )
-                            with col3:
-                                if st.button("Save to My Profile", help="Coming soon"):
-                                    st.info("This feature is coming soon!")
+                            csv = recommended_games.to_csv(index=False)
+                            st.download_button(
+                                label="Download as CSV",
+                                data=csv,
+                                file_name='my_game_recommendations.csv',
+                                mime='text/csv',
+                                use_container_width=True
+                            )
                         else:
                             st.warning("""
                             No matching games found! Try:
