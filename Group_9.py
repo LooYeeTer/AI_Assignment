@@ -345,7 +345,7 @@ elif page == "Top 10 Recommendation based on User Preferences":
                             st.subheader("📥 Download Your Recommendations")
                             csv = recommended_games.to_csv(index=False)
                             st.download_button(
-                                label="Download as CVV",
+                                label="Download as CSV",
                                 data=csv,
                                 file_name='my_game_recommendations.csv',
                                 mime='text/csv',
