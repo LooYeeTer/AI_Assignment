@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -188,6 +189,7 @@ elif page == "Top 10 Recommendation based on User Preferences":
     </div>
     """, unsafe_allow_html=True)
 
+    # Upload Section
     with st.expander("📤 Upload Your Game Dataset", expanded=True):
         uploaded_file = st.file_uploader(
             "Drag and drop or browse your CSV file",
@@ -213,7 +215,7 @@ elif page == "Top 10 Recommendation based on User Preferences":
 
                 st.success(f"✅ Loaded {len(df_uploaded)} games successfully")
 
-                # Stats
+                # Show dataset stats
                 col1, col2, col3 = st.columns(3)
                 with col1:
                     st.metric("Total Games", len(df_uploaded))
@@ -260,7 +262,7 @@ elif page == "Top 10 Recommendation based on User Preferences":
                             (filtered_df['User Score'] >= min_score) & (filtered_df['User Score'] <= max_score)
                         ]
 
-                        # Additional filters
+                        # Apply additional filters
                         if 'User Ratings Count' in filtered_df.columns:
                             filtered_df = filtered_df[filtered_df['User Ratings Count'] >= min_reviews]
 
@@ -276,18 +278,14 @@ elif page == "Top 10 Recommendation based on User Preferences":
                         # Calculate Match Accuracy
                         def calculate_match_accuracy(row):
                             score = 0
-                            # Genre match points
                             if selected_genres:
                                 game_genres = row['Genres'].split(', ')
                                 genre_matches = len(set(game_genres) & set(selected_genres))
                                 score += genre_matches
-                            # User Score range match
                             if min_score <= row['User Score'] <= max_score:
                                 score += 1
-                            # Reviews count match
                             if 'User Ratings Count' in row and row['User Ratings Count'] >= min_reviews:
                                 score += 1
-                            # Year range match
                             if 'Release Year' in row and year_range[0] <= row['Release Year'] <= year_range[1]:
                                 score += 1
                             return min(score, 5)  # Cap it at 5
@@ -300,9 +298,13 @@ elif page == "Top 10 Recommendation based on User Preferences":
                         ).head(10)
 
                         if not recommended_games.empty:
+                            # Calculate Predicted Score and MAE
+                            recommended_games['Predicted User Score'] = (recommended_games['Match Accuracy'] / 5) * 10
+                            mae = np.mean(np.abs(recommended_games['User Score'] - recommended_games['Predicted User Score']))
+
                             st.subheader("🌟 Your Top 10 Recommended Games")
 
-                            # Display 2 games per row
+                            # Display games
                             for i in range(0, len(recommended_games), 2):
                                 cols = st.columns(2)
                                 for j in range(2):
@@ -316,12 +318,16 @@ elif page == "Top 10 Recommendation based on User Preferences":
                                                     <p><b>Genre:</b> {game['Genres']}</p>
                                                     <p><b>User Score:</b> {game['User Score']:.1f}/10</p>
                                                     <p><b>Match Accuracy:</b> {game['Match Accuracy']}/5</p>
+                                                    <p><b>Predicted User Score:</b> {game['Predicted User Score']:.1f}/10</p>
                                                     {'<p><b>Platforms:</b> ' + game['Platforms'] + '</p>' if 'Platforms' in game else ''}
                                                     {'<p><b>Release Date:</b> ' + str(game['Release Date']) + '</p>' if 'Release Date' in game else ''}
                                                 </div>
                                                 """, unsafe_allow_html=True)
 
-                            # Download Options
+                            st.markdown("---")
+                            st.subheader("📊 Model Evaluation")
+                            st.metric(label="Mean Absolute Error (MAE)", value=f"{mae:.2f}")
+
                             st.markdown("---")
                             st.subheader("📥 Download Your Recommendations")
                             col1, col2, col3 = st.columns(3)
