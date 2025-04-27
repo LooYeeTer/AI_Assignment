@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_absolute_error
 
 # Set page config
 st.set_page_config(
@@ -56,7 +58,42 @@ def content_based_recommendations(game_name, num_recommendations=5):
         return df_content.iloc[sim_indices][['Title', 'Genres', 'User Score', 'Platforms', 'Release Date']]
     except IndexError:
         return pd.DataFrame(columns=['Title', 'Genres', 'User Score'])
+        
+def calculate_mae(recommendations, target_game):
+    try:
+        # Features to compare (numeric features only)
+        numeric_features = ['User Score']
+        
+        # Calculate MAE for each feature
+        mae_results = {}
+        for feature in numeric_features:
+            target_value = target_game[feature]
+            recommended_values = recommendations[feature]
+            absolute_errors = abs(recommended_values - target_value)
+            mae_results[f"{feature} MAE"] = absolute_errors.mean()
 
+        # Combine target and recommendations genres into a list
+        all_genres = [target_game['Genres']] + recommendations['Genres'].tolist()
+        
+        # TF-IDF Vectorization
+        vectorizer = TfidfVectorizer()
+        tfidf_matrix = vectorizer.fit_transform(all_genres)
+        
+        # Calculate cosine similarities (first row is target)
+        cosine_similarities = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:]).flatten()
+        
+        # Cosine similarity is 1 for perfect match, so error = 1 - cosine_sim
+        genre_errors = 1 - cosine_similarities
+        
+        # Mean of genre errors
+        mae_results["Genre Similarity Error"] = genre_errors.mean()
+        
+        return mae_results
+    
+    except Exception as e:
+        st.error(f"Could not calculate MAE: {str(e)}")
+        return None
+        
 # Function to recommend games based on file upload and filters
 def recommend_games(df, preferences):
     genre_filter = df['Genres'].str.contains(preferences['Genres'], case=False, na=False)
@@ -141,7 +178,8 @@ if page == "Home":
     </div>
     """, unsafe_allow_html=True)
 
-# Page 1: Content-Based Recommendations
+
+#Page 1 : Content Based Filtering
 elif page == "Content-Based Recommendations":
     st.markdown("<h1 style='text-align: center; color: #4CAF50;'>🎮 Game Recommendation System</h1>", unsafe_allow_html=True)
     st.markdown("<h2>Find Games Similar to Your Favorite</h2>", unsafe_allow_html=True)
@@ -171,9 +209,58 @@ elif page == "Content-Based Recommendations":
         if not recommendations.empty:
             st.markdown(f"### Games similar to {game_input}:")
             st.table(recommendations)
+            
+            st.markdown("---")
+            st.subheader("Recommendation Accuracy Metrics")
+            
+            # Calculate MAE
+            mae_results =calculate_mae(recommendations, game_info)
+            
+            if mae_results:
+                # Display MAE metrics in columns
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric("User Score MAE", 
+                             f"{mae_results.get('User Score MAE', 0):.2f}",
+                             help="Lower is better (0 = perfect match)")
+                
+                with col2:
+                    st.metric("Genre Similarity Error", 
+                             f"{mae_results.get('Genre Similarity Error', 0):.2f}",
+                             help="Lower is better (0 = perfect match)")
+                
+                with col3:
+                    avg_mae = (mae_results.get('User Score MAE', 0) + 
+                              mae_results.get('Genre Similarity Error', 0)) / 2
+                    st.metric("Overall MAE", 
+                             f"{avg_mae:.2f}",
+                             help="Average of all feature errors")
+                
+                # Visualize the errors
+                with st.expander("View Detailed Error Analysis"):
+                    # Create a DataFrame for visualization
+                    mae_df = pd.DataFrame({
+                        'Metric': ['User Score', 'Genre Similarity'],
+                        'MAE': [mae_results['User Score MAE'], 
+                               mae_results['Genre Similarity Error']]
+                    })
+                    
+                    # Plot using Streamlit's native bar chart
+                    st.bar_chart(mae_df.set_index('Metric'))
+                    
+                   # Interpretation
+                    st.markdown("""
+                    **How to interpret MAE:**
+                    - **User Score MAE**: Average difference in user ratings between recommended and target game
+                    - **Genre Similarity Error**: 1 - cosine similarity of genres (0 = identical genres)
+                    - **Lower values** indicate better matches
+                    """)
+            
         else:
             st.write("No matching game found. Please try another.")
 
+# Page 2: File Upload and Filters
 # Page 2: File Upload and Filters
 elif page == "Top 10 Recommendation based on User Preferences":
     st.title("🎮 Personalized Game Recommendations")
@@ -368,7 +455,7 @@ elif page == "Top 10 Recommendation based on User Preferences":
         ℹ️ Upload a CSV file containing game data to begin.
         Need sample data? [Download sample](#) (coming soon!)
         """)
-        
+
 # Page 3: Game Correlation Finder
 elif page == "Game Correlation Finder":
     st.title('🎮 Game Correlation Finder')
@@ -380,57 +467,155 @@ elif page == "Game Correlation Finder":
         df = pd.read_csv(path)
         path_user = 'User_Dataset.csv'
         userset = pd.read_csv(path_user)
-        data = pd.merge(df, userset, on='Title').dropna()  
+        data = pd.merge(df, userset, on='Title').dropna()
         return data
 
     data = load_data()
 
-    score_matrix = data.pivot_table(index='user_id', columns='Title', values='user_score', fill_value=0)
-
+    # Create pivot table
+    score_matrix = data.pivot_table(index='user_id', columns='Title', values='user_score')
     game_titles = score_matrix.columns.sort_values().tolist()
 
-    # Split layout into two columns for better organization
     col1, col2 = st.columns([1, 3])
 
     with col1:
-        # Game title selection
         game_title = st.selectbox("Select a game title", game_titles, help="Choose a game to see its correlation with others.")
 
-    # Divider line for better visual separation
     st.markdown("---")
 
     if game_title:
-        game_user_score = score_matrix[game_title]
-        similar_to_game = score_matrix.corrwith(game_user_score)
-        corr_drive = pd.DataFrame(similar_to_game, columns=['Correlation']).dropna()
 
-        # Display the top 10 correlated games in the second column
-        with col2:
-            st.subheader(f"🎯 Correlations for '{game_title}'")
-            st.dataframe(corr_drive.sort_values('Correlation', ascending=False).head(10))
+        # Normalize the score_matrix by subtracting user mean
+        normalized_matrix = score_matrix.sub(score_matrix.mean(axis=1), axis=0)
 
-        # Display number of user scores for each game
-        user_scores_count = data.groupby('Title')['user_score'].count().rename('total num_of_user_score')
-        merged_corr_drive = corr_drive.join(user_scores_count, how='left')
+        # Pearson Correlation (normalized)
+        def pearson_correlation(matrix, target_col):
+            target = matrix[target_col]
+            correlations = {}
+            for col in matrix.columns:
+                if col == target_col:
+                    continue
+                common = matrix[[target_col, col]].dropna()
+                if len(common) < 3:
+                    correlations[col] = 0
+                    continue
+                corr = common[target_col].corr(common[col])
+                correlations[col] = corr if not np.isnan(corr) else 0
+            return pd.Series(correlations)
 
-        # Calculate average user score for each game
-        avg_user_score = data.groupby('Title')['user_score'].mean().rename('avg_user_score')
-        detailed_corr_info = merged_corr_drive.join(avg_user_score, how='left')
+        pearson_corr = pearson_correlation(normalized_matrix, game_title)
+        pearson_corr = pearson_corr.clip(-1, 1)  # Clip to [-1, 1]
 
-        # Add developer and publisher columns (assuming they're in the dataset)
-        additional_info = data[['Title', 'Developer', 'Genres']].drop_duplicates().set_index('Title')
-        detailed_corr_info = detailed_corr_info.join(additional_info, how='left')
+        # Cosine Similarity (normalized)
+        def cosine_similarity_optimized(matrix, target_col):
+            similarities = {}
+            target_vec = matrix[target_col].values
 
-        # Show detailed high-score correlations with more information
-        st.subheader("Games you may like (with more than 10 number of user scores and average user score):")
-        high_score_corr = detailed_corr_info[detailed_corr_info['total num_of_user_score'] > 10].sort_values('Correlation', ascending=False).head()
-        
-        # Display the dataframe with additional details including average user score
-        st.dataframe(high_score_corr[['Correlation', 'total num_of_user_score', 'avg_user_score', 'Developer', 'Genres']])
+            for col in matrix.columns:
+                if col == target_col:
+                    continue
 
-    else:
-        st.warning("Please select a game title from the dropdown to see the correlations.")
+                other_vec = matrix[col].values
+                mask = ~np.isnan(target_vec) & ~np.isnan(other_vec)
+                valid_target = target_vec[mask]
+                valid_other = other_vec[mask]
 
+                if len(valid_target) < 3:
+                    similarities[col] = 0
+                    continue
+
+                dot_product = np.dot(valid_target, valid_other)
+                norm_product = np.linalg.norm(valid_target) * np.linalg.norm(valid_other)
+
+                similarities[col] = dot_product / norm_product if norm_product != 0 else 0
+
+            return pd.Series(similarities)
+
+        cosine_sim = cosine_similarity_optimized(normalized_matrix, game_title)
+        cosine_sim = cosine_sim.clip(0, 1)  # Clip to [0, 1]
+
+        # Hybrid Score
+        hybrid_score = 0.6 * pearson_corr + 0.4 * cosine_sim
+        hybrid_df = pd.DataFrame({'Hybrid Score': hybrid_score})
+
+        # Metadata
+        meta_info = data[['Title', 'Developer', 'Genres']].drop_duplicates().set_index('Title')
+        user_counts = data.groupby('Title')['user_score'].count().rename('User Ratings Count')
+        avg_scores = data.groupby('Title')['user_score'].mean().rename('Average Score')
+
+        # Shared users calculation
+        shared_users = {}
+        target_users = set(score_matrix[score_matrix[game_title].notna()].index)
+        for game in hybrid_df.index:
+            game_users = set(score_matrix[score_matrix[game].notna()].index)
+            shared_users[game] = len(target_users & game_users)
+        shared_users = pd.Series(shared_users, name='Shared Users')
+
+        detailed = hybrid_df.join([
+            shared_users,
+            user_counts,
+            avg_scores,
+            meta_info
+        ], how='left')
+
+        # Apply filtering thresholds
+        detailed = detailed[
+            (detailed['Shared Users'] >= 3) &
+            (detailed['User Ratings Count'] >= 5) &
+            (detailed['Average Score'] >= 6.0)
+        ].copy()
+
+        # Compute Accuracy
+        def compute_metrics(game1, game2, threshold=1.0):
+            common = score_matrix[[game1, game2]].dropna()
+            if common.empty:
+                return None, None
+            diffs = (common[game1] - common[game2]).abs()
+            tp = (diffs <= threshold).sum()
+            total = len(diffs)
+            accuracy = round((tp / total) * 100, 2) if total > 0 else 0
+           
+            return accuracy
+
+        if not detailed.empty:
+            # Accuracy 
+            metrics = [compute_metrics(game_title, game) for game in detailed.index]
+            accuracy_df = pd.DataFrame(
+                metrics,
+                index=detailed.index,
+                columns=['Accuracy (%)']
+            )
+            detailed = pd.concat([detailed, accuracy_df], axis=1)
+
+            # Calculate MAE for top 10
+            top10_recommended = detailed.nlargest(10, 'Hybrid Score').index
+            maes = []
+            for game in top10_recommended:
+                common = score_matrix[[game_title, game]].dropna()
+                if not common.empty:
+                    mae = mean_absolute_error(common[game_title], common[game])
+                    maes.append(mae)
+            avg_mae = round(np.mean(maes), 4) if maes else None
+
+            # Display
+            with col2:
+                st.subheader(f"🎯 Enhanced Correlation (Normalized Pearson + Cosine) for '{game_title}'")
+                st.dataframe(
+                    detailed[['Hybrid Score', 'Accuracy (%)', 'Shared Users', 
+                              'User Ratings Count', 'Average Score', 'Developer', 'Genres']]
+                    .sort_values('Hybrid Score', ascending=False)
+                    .head(10)
+                )
+
+                st.markdown("---")
+                st.subheader("📈 Recommendation Quality Metrics")
+                if avg_mae is not None:
+                    st.success(f"*Average MAE for Top 10 Recommendations:* {avg_mae}")
+
+                else:
+                    st.warning("Not enough common users to calculate MAE.")
+        else:
+            st.warning("No sufficient data to show related games for this title. Try another more popular game.")
 
 # About Page
 elif page == "About":
